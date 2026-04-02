@@ -349,16 +349,31 @@
             <p class="text-xs">Paste SVG and click Preview</p>
           </div>
 
-          <!-- Banner iframe -->
+          <!-- Banner iframe
+               allow-popups: required so window.open(clickTag) works
+               allow-same-origin: lets the blob-URL origin resolve CDN scripts  -->
           <iframe id="preview-frame"
             class="absolute inset-0 w-full h-full border-0 hidden"
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-popups allow-same-origin"
             title="Banner Preview"></iframe>
 
           <!-- Hover play button overlay -->
           <button id="play-overlay">▶ Replay</button>
 
         </div>
+      </div>
+
+      <!-- ── Preview status bar ─────────────────────────────────────────────
+           Shows the current pipeline stage so the user always knows what
+           the tool is doing (especially useful for large base64 SVGs).
+      ──────────────────────────────────────────────────────────────────── -->
+      <div class="shrink-0 flex items-center gap-2 px-4 py-1.5 border-t border-gray-800 bg-gray-900/30">
+        <span id="preview-status-dot"
+              class="w-1.5 h-1.5 rounded-full bg-gray-700 shrink-0 transition-colors duration-300"></span>
+        <span id="preview-status-text"
+              class="text-xs font-mono text-gray-600 transition-colors duration-300">
+          Status: Waiting for SVG…
+        </span>
       </div>
 
     </div><!-- /right -->

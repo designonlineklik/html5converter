@@ -29,6 +29,7 @@ const state = {
   lastAnalysis:   null,
   layers:         [],
   _ratioManuallySet: false,
+  _previewBlobURL:   null,   // current blob: URL loaded in the iframe
 };
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
@@ -53,7 +54,9 @@ const borderToggle   = document.getElementById('border-toggle');
 const layerTree      = document.getElementById('layer-tree');
 const layerEmpty     = document.getElementById('layer-empty');
 const layerCount     = document.getElementById('layer-count');
-const adSizeSelect   = document.getElementById('ad-size');
+const adSizeSelect        = document.getElementById('ad-size');
+const previewStatusDot  = document.getElementById('preview-status-dot');
+const previewStatusText = document.getElementById('preview-status-text');
 
 // ─── Slider + toggle listeners ────────────────────────────────────────────────
 speedSlider.addEventListener('input', () => {
@@ -123,20 +126,32 @@ function updateRatioButtons(ratio) {
 
 // ─── Clear ────────────────────────────────────────────────────────────────────
 document.getElementById('clear-btn').addEventListener('click', () => {
-  svgInput.value = '';
-  state.lastSVGRaw  = '';
+  svgInput.value     = '';
+  state.lastSVGRaw   = '';
   state.lastAnalysis = null;
   state.layers       = [];
+  // Release any held blob URL to free memory
+  if (state._previewBlobURL) { URL.revokeObjectURL(state._previewBlobURL); state._previewBlobURL = null; }
+  previewFrame.src   = 'about:blank';
   previewFrame.classList.add('hidden');
-  previewFrame.srcdoc = '';
   previewPH.classList.remove('hidden');
   replayBtn.classList.add('hidden');
   statusBadge.classList.add('hidden');
+  setPreviewStatus('Waiting for SVG…', 'idle');
   renderLayerTree();
 });
 
 // ─── Replay / Play buttons ────────────────────────────────────────────────────
-function doReplay() { if (state.lastHTML) previewFrame.srcdoc = state.lastHTML; }
+function doReplay() {
+  if (!state.lastHTML) return;
+  // Re-use the Blob URL path so replaying large SVGs also works without limits
+  const blob   = new Blob([state.lastHTML], { type: 'text/html' });
+  const newURL = URL.createObjectURL(blob);
+  if (state._previewBlobURL) URL.revokeObjectURL(state._previewBlobURL);
+  state._previewBlobURL = newURL;
+  previewFrame.src = newURL;
+  setPreviewStatus('Replaying animation…', 'working');
+}
 replayBtn.addEventListener('click', doReplay);
 playOverlay.addEventListener('click', doReplay);
 
@@ -200,7 +215,14 @@ function runPreview() {
   });
 
   state.lastHTML = html;
-  previewFrame.srcdoc = html;
+
+  // Use Blob URL instead of srcdoc — no size limit, works with large base64 SVGs
+  const blob   = new Blob([html], { type: 'text/html' });
+  const newURL = URL.createObjectURL(blob);
+  if (state._previewBlobURL) URL.revokeObjectURL(state._previewBlobURL);
+  state._previewBlobURL = newURL;
+  previewFrame.src = newURL;
+
   previewPH.classList.add('hidden');
   previewFrame.classList.remove('hidden');
   replayBtn.classList.remove('hidden');
@@ -209,6 +231,7 @@ function runPreview() {
     (state.adSize ? ` → ${state.adSize.width}×${state.adSize.height}` : '') +
     ` · ${state.lastAnalysis.aspectRatio}`;
   setStatus('Preview ready');
+  setPreviewStatus('Preview ready', 'ok');
 }
 
 
@@ -225,6 +248,14 @@ function analyzeSVG(svgString) {
   if (!svg) throw new Error('No <svg> root found');
 
   const { width, height, aspectRatio } = extractDimensions(svg);
+
+  // Ensure SVG fills its container regardless of what Canva exported
+  svg.setAttribute('width',  '100%');
+  svg.setAttribute('height', '100%');
+  // If viewBox is missing (shouldn't happen but guard it), synthesise one
+  if (!svg.getAttribute('viewBox')) {
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  }
 
   // Order: CTA first (so text clustering can exclude CTA text elements)
   const ctaGroups  = findCTAGroups(svg, width, height);
@@ -296,8 +327,17 @@ function extractDimensions(svg) {
     const p = vb.trim().split(/[\s,]+/);
     if (p.length === 4) { width = parseFloat(p[2]); height = parseFloat(p[3]); }
   }
-  if (!width)  width  = parseFloat(svg.getAttribute('width'))  || 1080;
-  if (!height) height = parseFloat(svg.getAttribute('height')) || 1080;
+  // Only read width/height attributes if they are plain numbers (not "100%")
+  if (!width) {
+    const w = svg.getAttribute('width');
+    if (w && !w.includes('%')) width = parseFloat(w);
+    if (!width) width = 1080;
+  }
+  if (!height) {
+    const h = svg.getAttribute('height');
+    if (h && !h.includes('%')) height = parseFloat(h);
+    if (!height) height = 1080;
+  }
   const r = width / height;
   return { width, height, aspectRatio: r > 1.6 ? '16:9' : r < 0.9 ? '4:5' : '1:1' };
 }
@@ -832,19 +872,37 @@ function buildAnimationScript(layers, opts) {
   return `(function () {
   'use strict';
 
+  if (typeof gsap === 'undefined') {
+    console.error('[Banner Engine] GSAP failed to load — animations skipped');
+    return;
+  }
+  console.log('[Banner Engine] GSAP ready, building timeline…');
+
   var SPD          = ${SPD};           // base duration unit (seconds)
   var DELAY        = ${DELAY};         // delay between layer animations
   var LINE_STAGGER = ${LINE_STAGGER};  // delay between text lines in a cluster
 
-  var tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
+  try {
+    var tl = gsap.timeline({ defaults: { ease: 'power2.out' } });
 
 ${blocks}
+
+  } catch (err) {
+    console.error('[Banner Engine] Timeline error:', err);
+    // Restore visibility so the banner is at least readable
+    document.querySelectorAll('#banner *').forEach(function (el) {
+      el.style.opacity = '';
+      el.style.transform = '';
+      el.style.visibility = '';
+    });
+  }
 
 })();`;
 }
 
 // Serialise element IDs to a quoted selector string for use in GSAP calls
-function selStr(ids) { return JSON.stringify(ids.map(id => '#' + id).join(', ')); }
+// CSS.escape handles Canva's special characters in auto-generated IDs
+function selStr(ids) { return JSON.stringify(ids.map(id => '#' + CSS.escape(id)).join(', ')); }
 // Strip */ so labels are safe inside JS comments
 function esc(s) { return String(s).replace(/\*\//g, ''); }
 
@@ -861,6 +919,30 @@ function setStatus(msg, isError = false) {
   const dot = statusBadge.querySelector('span');
   if (dot) dot.className = dot.className.replace(/bg-\S+-\d+/g,'').trim()
     + (isError ? ' bg-red-400' : ' bg-emerald-400');
+}
+
+
+// ── Preview status bar (below the iframe) ────────────────────────────────────
+// type: 'idle' | 'working' | 'ok' | 'error'
+function setPreviewStatus(msg, type) {
+  if (!previewStatusDot || !previewStatusText) return;
+  const DOT_COLORS = {
+    idle:    'bg-gray-600',
+    working: 'bg-yellow-400 animate-pulse',
+    ok:      'bg-emerald-400',
+    error:   'bg-red-400',
+  };
+  const TEXT_COLORS = {
+    idle:    'text-gray-600',
+    working: 'text-yellow-400',
+    ok:      'text-emerald-400',
+    error:   'text-red-400',
+  };
+  const dotClass  = DOT_COLORS[type]  || DOT_COLORS.idle;
+  const textClass = TEXT_COLORS[type] || TEXT_COLORS.idle;
+  previewStatusDot.className  = `w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-300 ${dotClass}`;
+  previewStatusText.className = `text-xs font-mono transition-colors duration-300 ${textClass}`;
+  previewStatusText.textContent = `Status: ${msg}`;
 }
 
 
