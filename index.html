@@ -9,189 +9,267 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <style>
+    * { box-sizing: border-box; }
     body { font-family: 'Inter', system-ui, sans-serif; }
     textarea { resize: none; }
 
-    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
 
     input[type="range"] {
       -webkit-appearance: none; appearance: none;
-      height: 4px; background: #334155; border-radius: 2px; outline: none;
+      height: 4px; background: #334155; border-radius: 2px; outline: none; cursor: pointer;
     }
     input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none; appearance: none;
-      width: 14px; height: 14px; border-radius: 50%;
-      background: #6366f1; cursor: pointer; border: 2px solid #818cf8;
+      -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+      background: #6366f1; border: 2px solid #818cf8;
     }
 
-    .aspect-1-1  { aspect-ratio: 1 / 1; }
-    .aspect-4-5  { aspect-ratio: 4 / 5; }
-    .aspect-16-9 { aspect-ratio: 16 / 9; }
+    /* ── Aspect ratio shell ─── */
+    .ar-shell { position: relative; width: 100%; }
+    .ar-shell::before { content: ''; display: block; padding-top: var(--ar, 100%); }
+    .ar-shell > * { position: absolute; inset: 0; }
 
-    .tab-active { background: #312e81; color: #a5b4fc; border-color: #6366f1; }
+    /* ── Tab button ─── */
+    .tab-active { background: #312e81 !important; color: #a5b4fc !important; border-color: #6366f1 !important; }
 
-    @keyframes pulse-badge { 0%,100%{opacity:1} 50%{opacity:.5} }
+    @keyframes pulse-badge { 0%,100%{opacity:1} 50%{opacity:.45} }
     .live-dot { animation: pulse-badge 1.5s ease-in-out infinite; }
 
+    /* ── Toggle switch ─── */
     .toggle { position: relative; display: inline-block; width: 30px; height: 17px; flex-shrink: 0; }
     .toggle input { opacity: 0; width: 0; height: 0; }
-    .toggle-slider {
-      position: absolute; inset: 0; background: #374151;
-      border-radius: 17px; cursor: pointer; transition: background .2s;
-    }
-    .toggle-slider::before {
-      content: ''; position: absolute;
-      width: 11px; height: 11px; left: 3px; bottom: 3px;
-      background: #9ca3af; border-radius: 50%; transition: .2s;
-    }
+    .toggle-slider { position: absolute; inset: 0; background: #374151; border-radius: 17px; cursor: pointer; transition: background .2s; }
+    .toggle-slider::before { content: ''; position: absolute; width: 11px; height: 11px; left: 3px; bottom: 3px; background: #9ca3af; border-radius: 50%; transition: .2s; }
     .toggle input:checked + .toggle-slider { background: #4f46e5; }
     .toggle input:checked + .toggle-slider::before { transform: translateX(13px); background: #fff; }
 
-    .layer-row { transition: background .12s; }
+    /* ── Layer rows ─── */
+    .layer-row { transition: background .1s; border-top: 2px solid transparent; }
     .layer-row:hover { background: rgba(255,255,255,.04); }
-    .layer-row.drag-active { opacity: .4; }
-    .layer-row.drag-over { border-top: 2px solid #6366f1; }
-    .drag-handle { cursor: grab; user-select: none; }
+    .layer-row.drag-active { opacity: .35; }
+    .layer-row.drag-over { border-top-color: #6366f1; }
+    .drag-handle { cursor: grab; }
 
-    .type-bg   { background:#1e293b; color:#94a3b8; }
-    .type-img  { background:#064e3b; color:#6ee7b7; }
-    .type-text { background:#1e1b4b; color:#a5b4fc; }
-    .type-cta  { background:#451a03; color:#fcd34d; }
+    /* ── Type badges ─── */
+    .type-bg    { background:#1e293b; color:#94a3b8; }
+    .type-img   { background:#064e3b; color:#6ee7b7; }
+    .type-text  { background:#1e1b4b; color:#a5b4fc; }
+    .type-cta   { background:#451a03; color:#fcd34d; }
+    .type-shape { background:#3b1f2b; color:#f9a8d4; }
 
-    /* Drop zone */
-    #svg-drop-zone { position: relative; flex-shrink: 0; }
+    /* ── Format chips ─── */
+    .fmt-chip {
+      cursor: pointer; padding: 2px 8px; border-radius: 4px; font-size: 10px;
+      font-family: monospace; border: 1px solid #374151; color: #6b7280;
+      background: transparent; transition: all .15s; white-space: nowrap;
+    }
+    .fmt-chip:hover { border-color: #6366f1; color: #a5b4fc; }
+    .fmt-chip.active { background: #312e81; color: #a5b4fc; border-color: #6366f1; }
+
+    /* ── Drop zone overlay ─── */
+    #svg-drop-zone { position: relative; }
     .drop-overlay {
       position: absolute; inset: 0; display: none;
-      flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-      border: 2px dashed #6366f1; background: rgba(79,70,229,0.08);
-      pointer-events: none; z-index: 20;
+      align-items: center; justify-content: center; flex-direction: column; gap: 6px;
+      background: rgba(79,70,229,.1); border: 2px dashed #6366f1;
+      pointer-events: none; z-index: 10; border-radius: 4px;
     }
     #svg-drop-zone.drag-hover .drop-overlay { display: flex; }
-    #svg-drop-zone.drag-hover textarea { opacity: 0.12; }
-    @keyframes drop-shake {
-      0%,100%{transform:translateX(0)} 25%,75%{transform:translateX(-5px)} 50%{transform:translateX(5px)}
-    }
-    #svg-drop-zone.drop-error { animation: drop-shake 0.35s ease-in-out; }
-    #svg-drop-zone.drop-error .drop-overlay { display:flex; border-color:#ef4444; background:rgba(239,68,68,.08); }
+    #svg-drop-zone.drag-hover textarea { opacity: .1; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%,75%{transform:translateX(-4px)} 50%{transform:translateX(4px)} }
+    #svg-drop-zone.drop-error { animation: shake .3s; }
 
-    /* Preview area — iframe fills ratio box, nothing overlaps left panel */
-    #ratio-container {
-      position: relative;
-      max-height: 100%;
-      max-width: 100%;
+    /* ── Empty drop zone ─── */
+    #empty-drop-zone {
+      border: 2px dashed #374151; border-radius: 12px; margin: 12px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; cursor: pointer; transition: border-color .2s, background .2s;
+      min-height: 160px; padding: 24px;
     }
+    #empty-drop-zone:hover, #svg-drop-zone.drag-hover #empty-drop-zone {
+      border-color: #6366f1; background: rgba(79,70,229,.06);
+    }
+
+    /* ── Preview container ─── */
+    #preview-container { position: relative; }
+    #preview-container > * { position: absolute; inset: 0; }
     #preview-frame {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      border: none;
-      display: none;          /* shown by JS after first render */
-      background: transparent;
+      width: 100%; height: 100%; border: none;
+      background: #000; display: none;
     }
     #preview-placeholder {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 12px; color: #374151;
     }
 
-    /* Hover replay button — sits above iframe, never outside right panel */
+    /* ── Hover replay overlay ─── */
     #play-overlay {
-      position: absolute; bottom: 10px; right: 10px; z-index: 10;
-      background: rgba(99,102,241,.85); border-radius: 8px;
-      padding: 6px 12px; font-size: 11px; font-weight: 600;
+      position: absolute; bottom: 8px; right: 8px; z-index: 20;
+      background: rgba(99,102,241,.85); border-radius: 6px;
+      padding: 5px 10px; font-size: 11px; font-weight: 600;
       color: #fff; cursor: pointer; border: none;
-      backdrop-filter: blur(4px);
-      opacity: 0; pointer-events: none;
-      transition: opacity .15s;
+      opacity: 0; pointer-events: none; transition: opacity .15s;
     }
-    #ratio-container:hover #play-overlay { opacity: 1; pointer-events: auto; }
-    #play-overlay:hover { background: rgba(99,102,241,1); }
+    #preview-wrap:hover #play-overlay { opacity: 1; pointer-events: auto; }
+
+    /* ── Animation scrubber track ─── */
+    #anim-scrubber { height: 3px; background: #1e293b; }
+    #anim-scrubber::-webkit-slider-thumb { width: 12px; height: 12px; background: #818cf8; }
+
+    /* ── Toast ─── */
+    #toast-area { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    .toast {
+      background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+      padding: 10px 16px; font-size: 11px; color: #e2e8f0; max-width: 280px;
+      opacity: 0; transform: translateY(6px); transition: all .2s;
+      pointer-events: none; display: flex; align-items: center; gap: 8px;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { border-color: #059669; }
+    .toast.error   { border-color: #dc2626; }
+    .toast.warn    { border-color: #d97706; }
+
+    /* ── Spinner ─── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 14px; height: 14px; border: 2px solid #334155; border-top-color: #6366f1; border-radius: 50%; animation: spin .6s linear infinite; flex-shrink: 0; }
+
+    /* ── Loading overlay on preview ─── */
+    #preview-loading {
+      position: absolute; inset: 0; z-index: 15;
+      background: rgba(3,7,18,.7); display: none;
+      align-items: center; justify-content: center;
+    }
+    #preview-loading.show { display: flex; }
+
+    /* ── Batch export panel ─── */
+    #batch-panel { display: none; }
+    #batch-panel.open { display: block; }
+
+    /* ── Undo/Redo buttons ─── */
+    .undo-btn { opacity: .35; pointer-events: none; transition: opacity .15s; }
+    .undo-btn.enabled { opacity: 1; pointer-events: auto; }
+
+    /* ── Inline text edit ─── */
+    .text-edit-input {
+      background: #0f172a; border: 1px solid #334155; border-radius: 4px;
+      color: #c7d2fe; font-size: 11px; padding: 2px 6px;
+      outline: none; width: 100%; transition: border-color .15s;
+    }
+    .text-edit-input:focus { border-color: #6366f1; }
+
+    /* ── Responsive: on small screens stack vertically ─── */
+    @media (max-width: 900px) {
+      main.split { flex-direction: column !important; }
+      main.split > div { width: 100% !important; height: 50vh !important; border-right: none !important; border-bottom: 1px solid #1e293b; }
+    }
   </style>
 </head>
 <body class="bg-gray-950 text-gray-100 h-screen flex flex-col overflow-hidden">
 
-  <!-- Header -->
-  <header class="flex items-center justify-between px-5 py-2.5 border-b border-gray-800 bg-gray-950 shrink-0">
-    <div class="flex items-center gap-3">
-      <div class="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold">H5</div>
-      <h1 class="text-sm font-semibold">SVG → HTML5 Banner Engine</h1>
-      <span class="text-xs text-gray-500 border border-gray-700 rounded-full px-2 py-0.5">v3.1</span>
+<!-- ─── Header ─────────────────────────────────────────────────────────────── -->
+<header class="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-950 shrink-0 gap-4">
+  <div class="flex items-center gap-3 shrink-0">
+    <div class="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold">H5</div>
+    <h1 class="text-sm font-semibold hidden sm:block">SVG → HTML5 Banner Engine</h1>
+    <span class="text-xs text-gray-600 border border-gray-800 rounded-full px-2 py-0.5">v4.0</span>
+  </div>
+
+  <!-- Format chips (IAB sizes) -->
+  <div class="flex items-center gap-1.5 overflow-x-auto flex-1 min-w-0" id="format-chips-header">
+    <!-- populated by JS -->
+  </div>
+
+  <div class="flex items-center gap-2 shrink-0">
+    <!-- Undo / Redo -->
+    <button id="undo-btn" class="undo-btn text-gray-500 hover:text-gray-300 px-1.5 py-1 rounded text-xs" title="Undo (Ctrl+Z)">↩</button>
+    <button id="redo-btn" class="undo-btn text-gray-500 hover:text-gray-300 px-1.5 py-1 rounded text-xs" title="Redo (Ctrl+Y)">↪</button>
+
+    <!-- Status badge -->
+    <div id="status-badge" class="hidden items-center gap-1.5 text-xs text-emerald-400 ml-1">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 live-dot shrink-0"></span>
+      <span id="status-text">Ready</span>
     </div>
-    <div class="flex items-center gap-4">
-      <div id="status-badge" class="hidden items-center gap-1.5 text-xs text-emerald-400">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 live-dot"></span>
-        <span id="status-text">Ready</span>
+  </div>
+</header>
+
+<!-- ─── Main ───────────────────────────────────────────────────────────────── -->
+<main class="split flex-1 flex overflow-hidden">
+
+  <!-- ════ LEFT PANEL ════ -->
+  <div class="w-1/2 flex flex-col border-r border-gray-800 overflow-hidden">
+
+    <!-- Scrollable content area -->
+    <div class="flex-1 overflow-y-auto flex flex-col min-h-0">
+
+      <!-- Empty-state drop zone (visible before SVG is loaded) -->
+      <div id="empty-drop-zone">
+        <svg class="w-10 h-10 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8"/>
+        </svg>
+        <p class="text-sm font-medium text-gray-500">Drop your SVG file here</p>
+        <p class="text-xs text-gray-700">or paste SVG code below</p>
       </div>
-      <div class="flex items-center gap-1 bg-gray-900 border border-gray-700 rounded-lg p-1">
-        <button class="ratio-btn tab-active text-xs px-2.5 py-1 rounded-md border border-transparent transition-all" data-ratio="1:1">1:1</button>
-        <button class="ratio-btn text-xs px-2.5 py-1 rounded-md border border-transparent text-gray-400 transition-all" data-ratio="4:5">4:5</button>
-        <button class="ratio-btn text-xs px-2.5 py-1 rounded-md border border-transparent text-gray-400 transition-all" data-ratio="16:9">16:9</button>
-      </div>
-    </div>
-  </header>
 
-  <!-- Main: two fixed-width halves, no overlap possible -->
-  <main class="flex-1 flex overflow-hidden">
-
-    <!-- LEFT PANEL -->
-    <div class="w-1/2 flex flex-col border-r border-gray-800 overflow-hidden">
-
-      <!-- SVG drop zone -->
+      <!-- SVG Input (drop zone + textarea) -->
       <div id="svg-drop-zone">
-        <div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/50">
-          <div class="flex items-center gap-2">
-            <span class="text-xs font-medium text-gray-400 uppercase tracking-wider">SVG Input</span>
-            <span class="text-xs text-gray-700">· or drop file</span>
-          </div>
-          <button id="clear-btn" class="text-xs text-gray-600 hover:text-gray-300 transition-colors">Clear</button>
+        <div class="flex items-center justify-between px-4 py-1.5 border-b border-gray-800 bg-gray-900/40">
+          <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">SVG Input</span>
+          <button id="clear-btn" class="text-xs text-gray-700 hover:text-gray-300 transition-colors">Clear</button>
         </div>
         <textarea id="svg-input"
-          class="h-44 w-full bg-gray-950 text-gray-300 text-xs font-mono p-3 outline-none placeholder-gray-700 overflow-auto border-b border-gray-800"
-          placeholder="Drop an .svg file here, or paste code…"
+          class="h-32 w-full bg-gray-950 text-gray-400 text-xs font-mono p-3 outline-none placeholder-gray-800 overflow-auto border-b border-gray-800"
+          placeholder="<svg xmlns=&quot;http://www.w3.org/2000/svg&quot; viewBox=&quot;0 0 1080 1080&quot;>…"
           spellcheck="false" autocomplete="off"></textarea>
+        <!-- Drop overlay -->
         <div class="drop-overlay" aria-hidden="true">
-          <svg class="w-7 h-7 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8"/>
+          <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v8"/>
           </svg>
-          <p class="text-xs font-semibold text-indigo-300">Drop SVG file here</p>
-          <p class="text-xs text-indigo-500">.svg files only</p>
+          <span class="text-xs font-semibold text-indigo-300">Drop SVG file</span>
         </div>
+      </div>
+
+      <!-- SVG info bar (shown after parse) -->
+      <div id="svg-info-bar" class="hidden px-4 py-1.5 border-b border-gray-800 bg-gray-900/20 flex items-center gap-3">
+        <span id="svg-info-text" class="text-xs font-mono text-gray-600 flex-1"></span>
+        <span id="font-warning" class="hidden text-xs text-yellow-500" title="SVG contains embedded fonts — they may not render in all HTML5 ad environments">⚠ embedded fonts</span>
       </div>
 
       <!-- Layer tree -->
-      <div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/30 shrink-0">
+      <div class="flex items-center justify-between px-4 py-1.5 border-b border-gray-800 bg-gray-900/30 shrink-0">
         <div class="flex items-center gap-2">
-          <span class="text-xs font-medium text-gray-400 uppercase tracking-wider">Layers &amp; Sequence</span>
-          <span id="layer-count" class="text-xs text-gray-600 font-mono"></span>
+          <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Layers</span>
+          <span id="layer-count" class="text-xs text-gray-700 font-mono"></span>
         </div>
-        <span class="text-xs text-gray-600">drag to reorder</span>
+        <span class="text-xs text-gray-700">drag to reorder</span>
       </div>
-      <div id="layer-tree" class="flex-1 overflow-y-auto px-2 py-2 space-y-0.5 min-h-0">
-        <div id="layer-empty" class="flex items-center justify-center h-full text-xs text-gray-700 text-center px-4">
-          Parse an SVG to see detected layers here
+      <div id="layer-tree" class="px-2 py-1.5 space-y-0.5">
+        <div id="layer-empty" class="py-6 text-center text-xs text-gray-800">
+          No layers yet — load an SVG
         </div>
       </div>
 
-      <!-- Controls -->
-      <div class="shrink-0 border-t border-gray-800 bg-gray-900/60 px-4 py-3 space-y-2.5">
+    </div><!-- /scroll area -->
+
+    <!-- ── Fixed controls at bottom ── -->
+    <div class="shrink-0 border-t border-gray-800 bg-gray-950">
+
+      <!-- Sliders -->
+      <div class="px-4 pt-3 pb-2 space-y-2.5">
         <div class="grid grid-cols-2 gap-4">
           <div>
             <div class="flex justify-between mb-1">
-              <label class="text-xs text-gray-400">Anim Speed</label>
+              <label class="text-xs text-gray-500">Anim Speed</label>
               <span id="speed-val" class="text-xs text-indigo-400 font-mono">1.0×</span>
             </div>
             <input type="range" id="speed-slider" class="w-full" min="0.2" max="3" step="0.1" value="1" />
           </div>
           <div>
             <div class="flex justify-between mb-1">
-              <label class="text-xs text-gray-400">Element Delay</label>
+              <label class="text-xs text-gray-500">Element Delay</label>
               <span id="delay-val" class="text-xs text-indigo-400 font-mono">0.15s</span>
             </div>
             <input type="range" id="delay-slider" class="w-full" min="0.05" max="0.6" step="0.05" value="0.15" />
@@ -200,108 +278,133 @@
         <div class="grid grid-cols-2 gap-4 items-end">
           <div>
             <div class="flex justify-between mb-1">
-              <label class="text-xs text-gray-400">Line Stagger</label>
+              <label class="text-xs text-gray-500">Line Stagger</label>
               <span id="stagger-val" class="text-xs text-indigo-400 font-mono">0.08s</span>
             </div>
             <input type="range" id="stagger-slider" class="w-full" min="0" max="0.4" step="0.02" value="0.08" />
           </div>
           <div class="flex items-center justify-between pb-0.5">
-            <label class="text-xs text-gray-400">1px Border</label>
-            <label class="toggle">
-              <input type="checkbox" id="border-toggle">
-              <span class="toggle-slider"></span>
-            </label>
+            <label class="text-xs text-gray-500">1px Border</label>
+            <label class="toggle"><input type="checkbox" id="border-toggle"><span class="toggle-slider"></span></label>
           </div>
         </div>
-        <div>
-          <label class="text-xs text-gray-400 block mb-1">ClickTag URL</label>
-          <input type="text" id="clicktag-url" value="https://www.example.com"
-            class="w-full bg-gray-800 border border-gray-700 rounded-md px-2 py-1.5 text-xs font-mono text-gray-200 outline-none focus:border-indigo-500" />
-        </div>
-        <div class="grid grid-cols-2 gap-3">
+
+        <!-- ClickTag + CTA -->
+        <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="text-xs text-gray-400 block mb-1">Ad Size</label>
-            <select id="ad-size"
-              class="w-full bg-gray-800 border border-gray-700 rounded-md px-2 py-1.5 text-xs text-gray-200 outline-none focus:border-indigo-500 appearance-none">
-              <option value="">Auto (from SVG)</option>
-              <optgroup label="Square / Social">
-                <option value="1080x1080">1080×1080 — Instagram</option>
-                <option value="1200x1200">1200×1200 — Facebook</option>
-              </optgroup>
-              <optgroup label="Portrait">
-                <option value="1080x1350">1080×1350 — IG Portrait</option>
-                <option value="300x600">300×600 — Half Page</option>
-                <option value="160x600">160×600 — Skyscraper</option>
-              </optgroup>
-              <optgroup label="Landscape / Display">
-                <option value="300x250">300×250 — Medium Rect</option>
-                <option value="728x90">728×90 — Leaderboard</option>
-                <option value="970x250">970×250 — Billboard</option>
-                <option value="320x50">320×50 — Mobile Banner</option>
-              </optgroup>
-            </select>
+            <label class="text-xs text-gray-500 block mb-1">ClickTag URL</label>
+            <input type="text" id="clicktag-url" value="https://www.example.com"
+              class="w-full bg-gray-900 border border-gray-800 rounded px-2 py-1 text-xs font-mono text-gray-300 outline-none focus:border-indigo-600" />
           </div>
           <div>
-            <label class="text-xs text-gray-400 block mb-1">CTA Colour Override</label>
-            <input type="text" id="cta-color" placeholder="#E3FF00 (blank = auto)"
-              class="w-full bg-gray-800 border border-gray-700 rounded-md px-2 py-1.5 text-xs font-mono text-gray-200 outline-none focus:border-indigo-500" />
+            <label class="text-xs text-gray-500 block mb-1">CTA Colour</label>
+            <input type="text" id="cta-color" placeholder="#E3FF00 or blank"
+              class="w-full bg-gray-900 border border-gray-800 rounded px-2 py-1 text-xs font-mono text-gray-300 outline-none focus:border-indigo-600" />
           </div>
         </div>
-        <!-- Action buttons -->
-        <div class="flex gap-2">
-          <button id="preview-btn"
-            class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
-            ▶ Preview Banner
-          </button>
-          <button id="download-btn"
-            class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
-            ↓ Download ZIP
+      </div>
+
+      <!-- Batch export toggle -->
+      <div class="border-t border-gray-800">
+        <button id="batch-toggle-btn"
+          class="w-full flex items-center justify-between px-4 py-2 text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-900/40 transition-colors">
+          <span class="font-medium">Batch Export Formats</span>
+          <span id="batch-chevron">▸</span>
+        </button>
+        <div id="batch-panel" class="px-4 pb-3">
+          <div id="batch-format-list" class="grid grid-cols-2 gap-x-4 gap-y-1 mb-2">
+            <!-- populated by JS -->
+          </div>
+          <button id="export-all-btn"
+            class="w-full bg-indigo-900/50 hover:bg-indigo-800/60 border border-indigo-700/40 text-indigo-300 text-xs font-semibold py-1.5 rounded-lg transition-colors">
+            ↓ Export Selected Formats
           </button>
         </div>
       </div>
 
-    </div><!-- /left -->
-
-    <!-- RIGHT PANEL -->
-    <div class="w-1/2 flex flex-col bg-gray-950 overflow-hidden">
-
-      <div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/50 shrink-0">
-        <span class="text-xs font-medium text-gray-400 uppercase tracking-wider">Live Preview</span>
-        <div class="flex items-center gap-3">
-          <span id="detected-info" class="text-xs text-gray-600 font-mono"></span>
-          <button id="replay-btn"
-            class="hidden text-xs bg-indigo-900/60 hover:bg-indigo-800/60 border border-indigo-700/50 text-indigo-300 px-3 py-1 rounded-md transition-colors">
-            ↺ Replay
-          </button>
-        </div>
+      <!-- Action buttons -->
+      <div class="flex gap-2 px-4 pb-3 pt-2">
+        <button id="preview-btn"
+          class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors">
+          ▶ Preview
+        </button>
+        <button id="copy-html-btn"
+          class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold px-3 py-2 rounded-lg transition-colors" title="Copy generated HTML to clipboard">
+          ⎘ Copy
+        </button>
+        <button id="download-btn"
+          class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs font-semibold px-3 py-2 rounded-lg transition-colors">
+          ↓ ZIP
+        </button>
       </div>
 
-      <div class="flex-1 flex items-center justify-center p-6 overflow-hidden">
-        <div id="ratio-container" class="aspect-1-1 bg-black shadow-2xl shadow-black/70 overflow-hidden"
-             style="width:100%; max-width:100%; max-height:100%;">
-          <div id="preview-placeholder" class="text-gray-700">
-            <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    </div><!-- /fixed controls -->
+  </div><!-- /left -->
+
+  <!-- ════ RIGHT PANEL ════ -->
+  <div class="w-1/2 flex flex-col bg-gray-950 overflow-hidden">
+
+    <!-- Preview header -->
+    <div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900/40 shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Preview</span>
+        <span id="detected-info" class="text-xs text-gray-700 font-mono"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="preview-status-text" class="text-xs font-mono text-gray-700">Waiting…</span>
+        <button id="replay-btn"
+          class="hidden text-xs bg-indigo-900/50 hover:bg-indigo-800/60 border border-indigo-700/40 text-indigo-300 px-2.5 py-1 rounded transition-colors">
+          ↺ Replay
+        </button>
+      </div>
+    </div>
+
+    <!-- Preview viewport — scales proportionally -->
+    <div class="flex-1 flex items-center justify-center p-4 overflow-hidden" id="preview-wrap">
+      <!-- ar-shell drives aspect ratio via --ar CSS var -->
+      <div id="ar-shell" class="ar-shell bg-black shadow-xl shadow-black/60"
+           style="--ar: 100%; max-width: 100%; max-height: 100%;">
+        <div id="preview-container">
+          <div id="preview-placeholder">
+            <svg class="w-10 h-10 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                 d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
             </svg>
-            <p class="text-xs">Drop an SVG or click Preview</p>
+            <p class="text-xs text-gray-700">Your banner preview will appear here</p>
           </div>
           <iframe id="preview-frame"
             sandbox="allow-scripts allow-popups allow-same-origin"
             title="Banner Preview"></iframe>
-          <button id="play-overlay">▶ Replay</button>
+          <div id="preview-loading">
+            <div class="spinner" style="width:24px;height:24px;border-width:3px;"></div>
+          </div>
         </div>
+        <button id="play-overlay">▶ Replay</button>
       </div>
+    </div>
 
-      <!-- Status bar -->
-      <div class="shrink-0 flex items-center gap-2 px-4 py-1.5 border-t border-gray-800 bg-gray-900/30">
-        <span id="preview-status-dot" class="w-1.5 h-1.5 rounded-full bg-gray-600 shrink-0"></span>
-        <span id="preview-status-text" class="text-xs font-mono text-gray-600">Status: Waiting for SVG…</span>
+    <!-- Animation timeline controls -->
+    <div id="anim-controls" class="hidden shrink-0 px-4 py-2 border-t border-gray-800 bg-gray-900/30">
+      <div class="flex items-center gap-2">
+        <button id="anim-play-btn" class="w-7 h-7 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 transition-colors" title="Play / Pause">▶</button>
+        <button id="anim-restart-btn" class="w-7 h-7 flex items-center justify-center bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-400 transition-colors" title="Restart">⟲</button>
+        <input type="range" id="anim-scrubber" class="flex-1" min="0" max="100" value="0" step="0.5" />
+        <span id="anim-time" class="text-xs font-mono text-gray-600 w-20 text-right shrink-0">0.0 / –s</span>
       </div>
+    </div>
 
-    </div><!-- /right -->
-  </main>
+    <!-- Status bar -->
+    <div class="shrink-0 flex items-center gap-2 px-4 py-1.5 border-t border-gray-800 bg-gray-900/20">
+      <span id="preview-status-dot" class="w-1.5 h-1.5 rounded-full bg-gray-700 shrink-0"></span>
+      <span id="preview-status-label" class="text-xs font-mono text-gray-700">Waiting for SVG…</span>
+    </div>
 
-  <script src="app.js"></script>
+  </div><!-- /right -->
+</main>
+
+<!-- Toast area -->
+<div id="toast-area"></div>
+
+<script src="app.js"></script>
 </body>
 </html>
